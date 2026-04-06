@@ -553,6 +553,16 @@ document.addEventListener('keydown', e => {
 drawFrame(pCtx, W, H, 0);
 
 // ── Export ────────────────────────────────────────────────────
+// Properly await a video seek
+function seekVideo(v, t) {
+  return new Promise(r => {
+    if (Math.abs(v.currentTime - t) < 0.001) { r(); return; }
+    const done = () => { v.removeEventListener('seeked', done); r(); };
+    v.addEventListener('seeked', done);
+    v.currentTime = t;
+  });
+}
+
 exportBtn.addEventListener('click', async () => {
   exportBtn.disabled = true;
   progWrap.style.display = 'flex';
@@ -561,20 +571,21 @@ exportBtn.addEventListener('click', async () => {
   const zip    = new JSZip();
   const folder = zip.folder('domain_expansion_frames');
 
-  // Seek video to chosen start time
+  // Pause and seek to chosen start time before we begin
   if (videoEl) {
     videoEl.pause();
-    videoEl.currentTime = vidStartTime;
-    await new Promise(r => setTimeout(r, 250));
+    await seekVideo(videoEl, vidStartTime);
   }
 
   for (let f = 0; f < TOTAL_FRAMES; f++) {
     const tMs     = f * FRAME_MS;
     const vidTime = vidStartTime + tMs / 1000;
 
-    if (videoEl && videoEl.readyState >= 2) {
-      videoEl.currentTime = vidTime;
-      await new Promise(r => setTimeout(r, 20));
+    // Seek and wait for the frame to actually be ready
+    if (videoEl) {
+      await seekVideo(videoEl, vidTime);
+      // Extra wait for decoder to flush the frame to the element
+      await new Promise(r => requestAnimationFrame(r));
     }
 
     drawFrame(rCtx, W, H, tMs);
