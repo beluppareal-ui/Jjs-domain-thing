@@ -158,7 +158,6 @@ body {
 <body>
 
 <div style="font-size:17px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;">Domain Expansion — Exporter</div>
-<div style="font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:0.06em;margin-bottom:4px;">1920 × 1080 · 12 fps · PNG sequence → ZIP</div>
 
 <div id="preview-wrap">
   <canvas id="preview-canvas" width="1920" height="1080"></canvas>
@@ -237,15 +236,33 @@ body {
 <script>
 // ── Constants ──────────────────────────────────────────────────
 const W = 1920, H = 1080;
-const FPS = 12;
-const FRAME_MS = 1000 / FPS;
-const ANIM_DURATION_MS = 1500; // exactly 1.5 seconds
+const ANIM_DURATION_MS = 1500;
 
 const OPEN_MS  = 420;
 const HOLD_MS  = 480;
 const CLOSE_MS = 300;
-const TOTAL_MS = OPEN_MS + HOLD_MS + CLOSE_MS;
-const TOTAL_FRAMES = Math.ceil((ANIM_DURATION_MS / 1000) * FPS) + 1;
+
+// Build a variable-fps frame schedule:
+// open + close = 24fps, hold = 12fps
+function buildFrameSchedule() {
+  const schedule = [];
+  const sections = [
+    { start: 0,                        end: OPEN_MS,               fps: 24 },
+    { start: OPEN_MS,                  end: OPEN_MS + HOLD_MS,     fps: 12 },
+    { start: OPEN_MS + HOLD_MS,        end: OPEN_MS + HOLD_MS + CLOSE_MS, fps: 24 },
+  ];
+  for (const sec of sections) {
+    const interval = 1000 / sec.fps;
+    for (let t = sec.start; t < sec.end - 0.001; t += interval) {
+      schedule.push(Math.round(t * 1000) / 1000);
+    }
+  }
+  // deduplicate and sort
+  const unique = [...new Set(schedule)].sort((a, b) => a - b);
+  return unique;
+}
+const FRAME_SCHEDULE = buildFrameSchedule();
+const TOTAL_FRAMES = FRAME_SCHEDULE.length;
 
 const SCALE_F        = W / 900;
 const WHITE_LINE_PX  = Math.round(10 * SCALE_F);
@@ -578,7 +595,7 @@ exportBtn.addEventListener('click', async () => {
   }
 
   for (let f = 0; f < TOTAL_FRAMES; f++) {
-    const tMs     = f * FRAME_MS;
+    const tMs     = FRAME_SCHEDULE[f];
     const vidTime = vidStartTime + tMs / 1000;
 
     // Seek and wait for the frame to actually be ready
