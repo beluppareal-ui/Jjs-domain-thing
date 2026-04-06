@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Domain Expansion — PNG Sequence Exporter</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Roboto Condensed', sans-serif;
+  padding: 20px;
+  gap: 14px;
+  color: #fff;
+}
+#preview-wrap {
+  position: relative;
+  width: 720px;
+  height: 405px;
+  background: #000;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#preview-canvas { width: 100%; height: 100%; display: block; }
+
+.panel {
+  width: 720px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.sec {
+  color: rgba(255,255,255,0.38);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 1px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 150px;
+}
+.cg label {
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 62px;
+}
+.cg input[type=range] { flex: 1; accent-color: #fff; cursor: pointer; }
+.cg .v { color: #fff; font-size: 11px; min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Video start scrubber */
+#scrub-wrap {
+  position: relative;
+  width: 100%;
+  height: 54px;
+  background: #000;
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+#scrub-canvas { width: 100%; height: 100%; display: block; }
+#scrub-needle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+#scrub-window {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(255,255,255,0.18);
+  border-left: 2px solid #fff;
+  border-right: 2px solid rgba(255,255,255,0.5);
+  pointer-events: none;
+}
+#scrub-label {
+  position: absolute;
+  top: 3px; left: 6px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn {
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.22);
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Roboto Condensed', sans-serif;
+  cursor: pointer;
+  transition: background 0.12s;
+  letter-spacing: 0.04em;
+}
+.btn:hover { background: rgba(255,255,255,0.18); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn.hi { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.45); font-weight: 700; }
+.btn.go { background: rgba(80,210,80,0.16); border-color: rgba(80,220,80,0.45); color: #9feCA0; font-weight: 700; }
+.btn.go:hover { background: rgba(80,210,80,0.28); }
+.ulabel {
+  background: rgba(255,255,255,0.09);
+  border: 1px dashed rgba(255,255,255,0.28);
+  color: rgba(255,255,255,0.65);
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Roboto Condensed', sans-serif;
+  cursor: pointer;
+  transition: background 0.12s;
+  letter-spacing: 0.04em;
+}
+.ulabel:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#file-input { display: none; }
+
+#prog-wrap {
+  width: 720px;
+  display: none;
+  flex-direction: column;
+  gap: 7px;
+}
+#prog-bg { width: 100%; height: 7px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+#prog-bar { height: 100%; background: #7fff7f; width: 0%; border-radius: 4px; transition: width 0.08s; }
+#prog-lbl { font-size: 11px; color: rgba(255,255,255,0.45); letter-spacing: 0.06em; }
+
+#render-canvas { position: fixed; left: -9999px; top: -9999px; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+
+<div style="font-size:17px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;">Domain Expansion — Exporter</div>
+<div style="font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:0.06em;margin-bottom:4px;">1920 × 1080 · 12 fps · PNG sequence → ZIP</div>
+
+<div id="preview-wrap">
+  <canvas id="preview-canvas" width="1920" height="1080"></canvas>
+</div>
+
+<div class="panel">
+  <div class="sec">Video</div>
+  <div class="row">
+    <div class="btn-row">
+      <label class="ulabel" for="file-input">↑ Upload Video</label>
+      <input type="file" id="file-input" accept="video/*">
+      <button class="btn hi" id="preview-btn">▶ Preview (Space)</button>
+    </div>
+  </div>
+
+  <!-- Start time scrubber — shown after video loads -->
+  <div id="scrub-section" style="display:none;">
+    <div class="sec" style="margin-bottom:6px;">Video Start Time — click to set where playback begins</div>
+    <div id="scrub-wrap">
+      <canvas id="scrub-canvas"></canvas>
+      <div id="scrub-window"></div>
+      <div id="scrub-needle"></div>
+      <div id="scrub-label">0.00s</div>
+    </div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;letter-spacing:0.04em;">
+      Shaded region = 1.5s of video that will play during the animation
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="sec">Position, Scale &amp; Rotation</div>
+  <div class="row">
+    <div class="cg">
+      <label>Offset X</label>
+      <input type="range" id="vid-x" min="-960" max="960" value="0" step="1">
+      <span class="v" id="vid-x-val">0px</span>
+    </div>
+    <div class="cg">
+      <label>Offset Y</label>
+      <input type="range" id="vid-y" min="-540" max="540" value="0" step="1">
+      <span class="v" id="vid-y-val">0px</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="cg">
+      <label>Scale</label>
+      <input type="range" id="vid-scale" min="0.2" max="4" value="1" step="0.01">
+      <span class="v" id="vid-scale-val">1.00×</span>
+    </div>
+    <div class="cg">
+      <label>Vid Rotate</label>
+      <input type="range" id="vid-rot" min="-180" max="180" value="0" step="0.5">
+      <span class="v" id="vid-rot-val">0°</span>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="sec">Export</div>
+  <div class="btn-row">
+    <button class="btn go" id="export-btn">⬇ Export PNG Sequence (ZIP)</button>
+  </div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.28);line-height:1.6;">
+    Renders all frames at 1920×1080. Video plays from your chosen start time. Takes ~10–30s.
+  </div>
+</div>
+
+<div id="prog-wrap">
+  <div id="prog-lbl">Rendering…</div>
+  <div id="prog-bg"><div id="prog-bar"></div></div>
+</div>
+
+<canvas id="render-canvas" width="1920" height="1080"></canvas>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────
+const W = 1920, H = 1080;
+const FPS = 12;
+const FRAME_MS = 1000 / FPS;
+const ANIM_DURATION_MS = 1500; // exactly 1.5 seconds
+
+const OPEN_MS  = 420;
+const HOLD_MS  = 480;
+const CLOSE_MS = 300;
+const TOTAL_MS = OPEN_MS + HOLD_MS + CLOSE_MS;
+const TOTAL_FRAMES = Math.ceil((ANIM_DURATION_MS / 1000) * FPS) + 1;
+
+const SCALE_F        = W / 900;
+const WHITE_LINE_PX  = Math.round(10 * SCALE_F);
+const BLACK_INNER_PX = Math.round(4  * SCALE_F);
+const BAND_OPEN_H    = Math.round(H  * 0.60);
+const BAR_WIDTH_FRAC = 1.10;
+const FONT_SIZE      = Math.round(46 * SCALE_F);
+const STROKE_W       = Math.round(3  * SCALE_F);
+
+// ── State ──────────────────────────────────────────────────────
+let videoEl      = null;
+let vidOffX      = 0, vidOffY = 0, vidScale = 1;
+let barAngleDeg  = -6;
+let vidRotDeg    = 0;
+let vidStartTime = 0;   // chosen video start second
+let scrubFrames  = [];  // thumbnail strip frames
+
+// ── DOM ────────────────────────────────────────────────────────
+const previewCanvas = document.getElementById('preview-canvas');
+const pCtx          = previewCanvas.getContext('2d');
+const renderCanvas  = document.getElementById('render-canvas');
+const rCtx          = renderCanvas.getContext('2d');
+const fileInput     = document.getElementById('file-input');
+const previewBtn    = document.getElementById('preview-btn');
+const exportBtn     = document.getElementById('export-btn');
+const progWrap      = document.getElementById('prog-wrap');
+const progBar       = document.getElementById('prog-bar');
+const progLbl       = document.getElementById('prog-lbl');
+const scrubSection  = document.getElementById('scrub-section');
+const scrubWrap     = document.getElementById('scrub-wrap');
+const scrubCanvas   = document.getElementById('scrub-canvas');
+const scrubNeedle   = document.getElementById('scrub-needle');
+const scrubWindow   = document.getElementById('scrub-window');
+const scrubLabel    = document.getElementById('scrub-label');
+const scrubCtx      = scrubCanvas.getContext('2d');
+
+// ── Sliders ────────────────────────────────────────────────────
+function bindSlider(id, valId, suffix, decimals, setter) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    document.getElementById(valId).textContent = v.toFixed(decimals) + suffix;
+    setter(v);
+    refreshStaticPreview();
+  });
+}
+bindSlider('vid-x',     'vid-x-val',     'px', 0, v => vidOffX     = v);
+bindSlider('vid-y',     'vid-y-val',     'px', 0, v => vidOffY     = v);
+bindSlider('vid-scale', 'vid-scale-val', '×',  2, v => vidScale    = v);
+bindSlider('vid-rot',   'vid-rot-val',   '°',  1, v => vidRotDeg   = v);
+
+// ── Video upload ───────────────────────────────────────────────
+fileInput.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (videoEl) { videoEl.pause(); URL.revokeObjectURL(videoEl.src); }
+  videoEl = document.createElement('video');
+  videoEl.src = URL.createObjectURL(file);
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  videoEl.preload = 'auto';
+  // Do NOT autoplay — wait for Space/Preview
+  await new Promise(r => { videoEl.onloadedmetadata = r; });
+  vidStartTime = 0;
+  scrubSection.style.display = 'block';
+  await buildScrubStrip();
+  updateScrubUI();
+  refreshStaticPreview();
+});
+
+// ── Scrub strip ────────────────────────────────────────────────
+async function buildScrubStrip() {
+  if (!videoEl) return;
+  const dur = videoEl.duration;
+  const W_S = scrubWrap.offsetWidth || 684;
+  const H_S = 54;
+  scrubCanvas.width  = W_S;
+  scrubCanvas.height = H_S;
+
+  const THUMBS = 40;
+  scrubFrames = [];
+
+  const tmpV = document.createElement('video');
+  tmpV.src = videoEl.src;
+  tmpV.muted = true;
+  tmpV.playsInline = true;
+  await new Promise(r => { tmpV.onloadedmetadata = r; });
+
+  for (let i = 0; i < THUMBS; i++) {
+    tmpV.currentTime = (i / (THUMBS - 1)) * dur;
+    await new Promise(r => { tmpV.onseeked = r; });
+    const tc = document.createElement('canvas');
+    tc.width = Math.round(W_S / THUMBS);
+    tc.height = H_S;
+    tc.getContext('2d').drawImage(tmpV, 0, 0, tc.width, H_S);
+    scrubCtx.drawImage(tc, i * tc.width, 0);
+    scrubFrames.push(tc);
+  }
+}
+
+function updateScrubUI() {
+  if (!videoEl) return;
+  const dur = videoEl.duration;
+  const W_S = scrubCanvas.width || 684;
+  const ANIM_S = ANIM_DURATION_MS / 1000;
+  const pct = vidStartTime / dur;
+  const winPct = ANIM_S / dur;
+
+  scrubNeedle.style.left = (pct * 100) + '%';
+  scrubLabel.textContent = vidStartTime.toFixed(2) + 's / ' + dur.toFixed(2) + 's';
+
+  const winLeft = pct * W_S;
+  const winWidth = Math.min(winPct * W_S, W_S - winLeft);
+  scrubWindow.style.left  = winLeft + 'px';
+  scrubWindow.style.width = winWidth + 'px';
+}
+
+scrubWrap.addEventListener('click', e => {
+  if (!videoEl) return;
+  const rect = scrubWrap.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  vidStartTime = pct * videoEl.duration;
+  updateScrubUI();
+  refreshStaticPreview();
+});
+scrubWrap.addEventListener('mousemove', e => {
+  if (!videoEl || !(e.buttons & 1)) return;
+  const rect = scrubWrap.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  vidStartTime = pct * videoEl.duration;
+  updateScrubUI();
+  refreshStaticPreview();
+});
+
+// ── Easing ────────────────────────────────────────────────────
+function easeExpOut(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+function easeExpIn(t)  { return t === 0 ? 0 : Math.pow(2, 10 * t - 10); }
+
+function getAnimState(tMs) {
+  let bandH = 0, wordOpacity = 0;
+  if (tMs <= 0) {
+    bandH = 0; wordOpacity = 1;
+  } else if (tMs <= OPEN_MS) {
+    bandH = BAND_OPEN_H * easeExpOut(tMs / OPEN_MS);
+    wordOpacity = 1;
+  } else if (tMs <= OPEN_MS + HOLD_MS) {
+    bandH = BAND_OPEN_H;
+    const hp = (tMs - OPEN_MS) / HOLD_MS;
+    const fs = (HOLD_MS - 100) / HOLD_MS;
+    wordOpacity = hp < fs ? 1 : Math.max(0, 1 - (hp - fs) / (1 - fs));
+  } else if (tMs <= OPEN_MS + HOLD_MS + CLOSE_MS) {
+    bandH = BAND_OPEN_H * (1 - easeExpIn((tMs - OPEN_MS - HOLD_MS) / CLOSE_MS));
+    wordOpacity = 0;
+  } else {
+    bandH = 0; wordOpacity = 0;
+  }
+  return { bandH, wordOpacity };
+}
+
+// ── Draw frame ────────────────────────────────────────────────
+function drawFrame(ctx, w, h, tMs) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  const { bandH, wordOpacity } = getAnimState(tMs);
+  const barCenterY = h / 2;
+  const totalBarH  = WHITE_LINE_PX * 2 + bandH;
+  const barW = w * BAR_WIDTH_FRAC;
+  const barX = -(barW - w) / 2;
+
+  ctx.save();
+  ctx.translate(w / 2, barCenterY);
+  ctx.rotate(barAngleDeg * Math.PI / 180);
+  ctx.translate(-w / 2, -barCenterY);
+
+  // Top white line
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(barX, barCenterY - totalBarH / 2, barW, WHITE_LINE_PX);
+
+  const bandTop = barCenterY - totalBarH / 2 + WHITE_LINE_PX;
+
+  if (bandH > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(barX, bandTop, barW, bandH);
+    ctx.clip();
+
+    ctx.fillStyle = '#111';
+    ctx.fillRect(barX, bandTop, barW, bandH);
+
+    if (videoEl && videoEl.readyState >= 2) {
+      const vw = videoEl.videoWidth  || 1280;
+      const vh = videoEl.videoHeight || 720;
+      const cs = Math.max(barW / vw, bandH / vh);
+      const dw = vw * cs * vidScale;
+      const dh = vh * cs * vidScale;
+      const cx = barX + barW / 2 + vidOffX;
+      const cy2 = bandTop + bandH / 2 + vidOffY;
+      ctx.save();
+      ctx.translate(cx, cy2);
+      ctx.rotate(vidRotDeg * Math.PI / 180);
+      ctx.drawImage(videoEl, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+    }
+
+    // Black inner borders
+    ctx.fillStyle = '#000';
+    ctx.fillRect(barX, bandTop, barW, BLACK_INNER_PX);
+    ctx.fillRect(barX, bandTop + bandH - BLACK_INNER_PX, barW, BLACK_INNER_PX);
+    ctx.restore();
+  }
+
+  // Bottom white line
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(barX, barCenterY + totalBarH / 2 - WHITE_LINE_PX, barW, WHITE_LINE_PX);
+  ctx.restore();
+
+  // Words
+  if (wordOpacity > 0) {
+    ctx.font = `900 ${FONT_SIZE}px 'Roboto Condensed', Impact, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha  = wordOpacity;
+    const lag         = 0.75;
+    const halfTravel  = (bandH / 2) * lag;
+    const cy          = barCenterY;
+
+    ctx.save();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth   = STROKE_W;
+    ctx.lineJoin    = 'round';
+    ctx.fillStyle   = '#000';
+    ctx.strokeText('DOMAIN', w * 0.18, cy - halfTravel - FONT_SIZE * 0.15);
+    ctx.fillText(  'DOMAIN', w * 0.18, cy - halfTravel - FONT_SIZE * 0.15);
+    ctx.restore();
+
+    ctx.save();
+    ctx.font = `900 ${FONT_SIZE}px 'Roboto Condensed', Impact, sans-serif`;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth   = STROKE_W;
+    ctx.lineJoin    = 'round';
+    ctx.fillStyle   = '#000';
+    const em = ctx.measureText('EXPANSION');
+    ctx.strokeText('EXPANSION', w * 0.82 - em.width, cy + halfTravel + FONT_SIZE * 1.05);
+    ctx.fillText(  'EXPANSION', w * 0.82 - em.width, cy + halfTravel + FONT_SIZE * 1.05);
+    ctx.restore();
+
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ── Static preview (idle, video paused at start time) ─────────
+function refreshStaticPreview() {
+  if (videoEl) {
+    videoEl.pause();
+    // Seek to chosen start, then draw after seek
+    videoEl.currentTime = vidStartTime;
+    videoEl.onseeked = () => {
+      drawFrame(pCtx, W, H, OPEN_MS); // show fully-open frame
+      videoEl.onseeked = null;
+    };
+  } else {
+    drawFrame(pCtx, W, H, OPEN_MS);
+  }
+}
+
+// ── Live preview animation ─────────────────────────────────────
+let previewRunning  = false;
+let previewStartWall = null;
+
+async function startPreview() {
+  if (previewRunning) return;
+  previewRunning = true;
+
+  // Seek video to chosen start time
+  if (videoEl) {
+    videoEl.currentTime = vidStartTime;
+    await new Promise(r => { videoEl.onseeked = () => { videoEl.onseeked = null; r(); }; });
+    videoEl.play();
+  }
+
+  previewStartWall = performance.now();
+
+  function loop(now) {
+    if (!previewRunning) return;
+    const tMs = now - previewStartWall;
+    drawFrame(pCtx, W, H, tMs);
+    if (tMs < ANIM_DURATION_MS + 100) {
+      requestAnimationFrame(loop);
+    } else {
+      previewRunning = false;
+      if (videoEl) videoEl.pause();
+      refreshStaticPreview();
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+previewBtn.addEventListener('click', () => { previewRunning = false; startPreview(); });
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); previewRunning = false; startPreview(); }
+});
+
+// Initial idle draw
+drawFrame(pCtx, W, H, 0);
+
+// ── Export ────────────────────────────────────────────────────
+exportBtn.addEventListener('click', async () => {
+  exportBtn.disabled = true;
+  progWrap.style.display = 'flex';
+  progBar.style.background = '#7fff7f';
+
+  const zip    = new JSZip();
+  const folder = zip.folder('domain_expansion_frames');
+
+  // Seek video to chosen start time
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.currentTime = vidStartTime;
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  for (let f = 0; f < TOTAL_FRAMES; f++) {
+    const tMs     = f * FRAME_MS;
+    const vidTime = vidStartTime + tMs / 1000;
+
+    if (videoEl && videoEl.readyState >= 2) {
+      videoEl.currentTime = vidTime;
+      await new Promise(r => setTimeout(r, 20));
+    }
+
+    drawFrame(rCtx, W, H, tMs);
+
+    const blob    = await new Promise(res => renderCanvas.toBlob(res, 'image/png'));
+    const arrBuf  = await blob.arrayBuffer();
+    folder.file(`frame_${String(f).padStart(4,'0')}.png`, arrBuf);
+
+    const pct = Math.round(((f + 1) / TOTAL_FRAMES) * 100);
+    progBar.style.width   = pct + '%';
+    progLbl.textContent   = `Rendering frame ${f + 1} / ${TOTAL_FRAMES}… (${pct}%)`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  progLbl.textContent = 'Zipping…';
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'domain_expansion_frames.zip'; a.click();
+  URL.revokeObjectURL(url);
+
+  progLbl.textContent       = 'Done! ZIP downloaded.';
+  progBar.style.background  = '#7fffA0';
+  exportBtn.disabled        = false;
+});
+</script>
+</body>
+</html>
