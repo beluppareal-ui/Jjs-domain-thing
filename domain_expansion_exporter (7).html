@@ -431,7 +431,7 @@ function drawFrame(ctx, w, h, tMs) {
     const scaledW = w / 1.18;
     ctx.font=`normal ${FONT_SIZE}px HWYGOTH, 'Roboto Condensed', Impact, sans-serif`;
     ctx.textBaseline='alphabetic';
-    const ht=(bandH/2)*0.75;
+    const ht=(bandH/2)*1;
 
     ctx.strokeStyle='#fff'; ctx.lineWidth=STROKE_W; ctx.lineJoin='round'; ctx.fillStyle='#000';
     ctx.strokeText('DOMAIN',    scaledW*0.18, cy-ht-FONT_SIZE*0.15);
