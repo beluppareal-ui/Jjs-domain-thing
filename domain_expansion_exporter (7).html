@@ -3,156 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Domain Expansion — PNG Sequence Exporter</title>
+<title>Domain Expansion — Exporter</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<script>
+// Load HWYGOTH font before anything draws
+const _hwyFont = new FontFace('HWYGOTH', 'url(HWYGOTH.TTF)');
+_hwyFont.load().then(f => { document.fonts.add(f); }).catch(()=>{});
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #111;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
-  font-family: 'Roboto Condensed', sans-serif;
-  padding: 20px;
-  gap: 14px;
-  color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh; font-family: 'Roboto Condensed', sans-serif;
+  padding: 20px; gap: 14px; color: #fff;
 }
+
+/* ── Preview ── */
 #preview-wrap {
-  position: relative;
-  width: 720px;
-  height: 405px;
-  background: #000;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  overflow: hidden;
-  flex-shrink: 0;
+  position: relative; width: 720px; height: 405px;
+  background: #000; border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; overflow: hidden; flex-shrink: 0;
 }
 #preview-canvas { width: 100%; height: 100%; display: block; }
 
+/* ── Fullscreen overlay ── */
+#fs-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 200;
+  background: #000; cursor: none;
+}
+#fs-overlay.active { display: flex; align-items: center; justify-content: center; }
+#fs-canvas { display: block; width: 100%; height: 100%; }
+#fs-hint {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,255,255,0.25); pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+/* ── Panels ── */
 .panel {
-  width: 720px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.11);
-  border-radius: 10px;
-  padding: 14px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
+  width: 720px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.11); border-radius: 10px;
+  padding: 14px 18px; display: flex; flex-direction: column; gap: 11px;
 }
-.sec {
-  color: rgba(255,255,255,0.38);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 1px;
-}
-.row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.cg {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 150px;
-}
-.cg label {
-  color: rgba(255,255,255,0.5);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  min-width: 62px;
-}
+.sec { color: rgba(255,255,255,0.38); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cg { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
+.cg label { color: rgba(255,255,255,0.5); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; min-width: 62px; }
 .cg input[type=range] { flex: 1; accent-color: #fff; cursor: pointer; }
 .cg .v { color: #fff; font-size: 11px; min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* Video start scrubber */
+/* ── Scrub ── */
 #scrub-wrap {
-  position: relative;
-  width: 100%;
-  height: 54px;
-  background: #000;
-  border-radius: 5px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
+  position: relative; width: 100%; height: 54px; background: #000;
+  border-radius: 5px; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
 }
 #scrub-canvas { width: 100%; height: 100%; display: block; }
-#scrub-needle {
-  position: absolute;
-  top: 0; bottom: 0;
-  width: 2px;
-  background: #fff;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-#scrub-window {
-  position: absolute;
-  top: 0; bottom: 0;
-  background: rgba(255,255,255,0.18);
-  border-left: 2px solid #fff;
-  border-right: 2px solid rgba(255,255,255,0.5);
-  pointer-events: none;
-}
-#scrub-label {
-  position: absolute;
-  top: 3px; left: 6px;
-  font-size: 10px;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 0.05em;
-  pointer-events: none;
-}
+#scrub-needle { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; transform: translateX(-50%); }
+#scrub-window { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.18); border-left: 2px solid #fff; border-right: 2px solid rgba(255,255,255,0.5); pointer-events: none; }
+#scrub-label { position: absolute; top: 3px; left: 6px; font-size: 10px; color: rgba(255,255,255,0.5); letter-spacing: 0.05em; pointer-events: none; }
 
+/* ── Buttons ── */
 .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .btn {
-  background: rgba(255,255,255,0.09);
-  border: 1px solid rgba(255,255,255,0.22);
-  color: #fff;
-  padding: 7px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-family: 'Roboto Condensed', sans-serif;
-  cursor: pointer;
-  transition: background 0.12s;
-  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.22);
+  color: #fff; padding: 7px 16px; border-radius: 6px; font-size: 12px;
+  font-family: 'Roboto Condensed', sans-serif; cursor: pointer; transition: background 0.12s; letter-spacing: 0.04em;
 }
 .btn:hover { background: rgba(255,255,255,0.18); }
 .btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.btn.hi { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.45); font-weight: 700; }
-.btn.go { background: rgba(80,210,80,0.16); border-color: rgba(80,220,80,0.45); color: #9feCA0; font-weight: 700; }
+.btn.hi  { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.45); font-weight: 700; }
+.btn.go  { background: rgba(80,210,80,0.16); border-color: rgba(80,220,80,0.45); color: #9fecA0; font-weight: 700; }
 .btn.go:hover { background: rgba(80,210,80,0.28); }
+.btn.fs  { background: rgba(200,160,255,0.14); border-color: rgba(200,160,255,0.4); color: #d4b0ff; font-weight: 700; }
+.btn.fs:hover { background: rgba(200,160,255,0.26); }
+.btn.cog { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); padding: 7px 11px; border-radius: 6px; font-size: 15px; cursor: pointer; transition: background 0.12s, color 0.12s; line-height: 1; }
+.btn.cog:hover { background: rgba(255,255,255,0.16); color: #fff; }
 .ulabel {
-  background: rgba(255,255,255,0.09);
-  border: 1px dashed rgba(255,255,255,0.28);
-  color: rgba(255,255,255,0.65);
-  padding: 7px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-family: 'Roboto Condensed', sans-serif;
-  cursor: pointer;
-  transition: background 0.12s;
-  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.09); border: 1px dashed rgba(255,255,255,0.28);
+  color: rgba(255,255,255,0.65); padding: 7px 16px; border-radius: 6px; font-size: 12px;
+  font-family: 'Roboto Condensed', sans-serif; cursor: pointer; transition: background 0.12s; letter-spacing: 0.04em;
 }
 .ulabel:hover { background: rgba(255,255,255,0.16); color: #fff; }
 #file-input { display: none; }
 
-#prog-wrap {
-  width: 720px;
-  display: none;
-  flex-direction: column;
-  gap: 7px;
-}
+/* ── Progress ── */
+#prog-wrap { width: 720px; display: none; flex-direction: column; gap: 7px; }
 #prog-bg { width: 100%; height: 7px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
 #prog-bar { height: 100%; background: #7fff7f; width: 0%; border-radius: 4px; transition: width 0.08s; }
 #prog-lbl { font-size: 11px; color: rgba(255,255,255,0.45); letter-spacing: 0.06em; }
 
-#render-canvas { position: fixed; left: -9999px; top: -9999px; width: 1920px; height: 1080px; }
+/* ── Off-screen render canvas ── */
+#render-canvas { position: fixed; left: -9999px; top: -9999px; }
+
+/* ── Settings Modal ── */
+#modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300; align-items: center; justify-content: center; }
+#modal-overlay.open { display: flex; }
+#modal { background: #1c1c1c; border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; padding: 22px 26px; width: 400px; display: flex; flex-direction: column; gap: 16px; }
+#modal-title { font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.45); padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.mg { display: flex; flex-direction: column; gap: 8px; }
+.mg-head { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.08em; text-transform: uppercase; }
+.mg-lbl { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.32); margin-top: 4px; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); padding: 5px 13px; border-radius: 5px; font-size: 12px; font-family: 'Roboto Condensed', sans-serif; cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s; letter-spacing: 0.04em; }
+.chip.on { background: rgba(255,255,255,0.17); border-color: rgba(255,255,255,0.5); color: #fff; font-weight: 700; }
+.chip:hover:not(.on) { background: rgba(255,255,255,0.12); }
+#modal-done { align-self: flex-end; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 7px 20px; border-radius: 6px; font-size: 12px; font-family: 'Roboto Condensed', sans-serif; cursor: pointer; letter-spacing: 0.04em; }
+#modal-done:hover { background: rgba(255,255,255,0.2); }
 </style>
 </head>
 <body>
@@ -165,64 +125,52 @@ body {
 
 <div class="panel">
   <div class="sec">Video</div>
-  <div class="row">
-    <div class="btn-row">
-      <label class="ulabel" for="file-input">↑ Upload Video</label>
-      <input type="file" id="file-input" accept="video/*">
-      <button class="btn hi" id="preview-btn">▶ Preview (Space)</button>
-    </div>
+  <div class="btn-row">
+    <label class="ulabel" for="file-input">↑ Upload Video</label>
+    <input type="file" id="file-input" accept="video/*">
+    <button class="btn hi" id="preview-btn">▶ Preview (Space)</button>
   </div>
-
-  <!-- Start time scrubber — shown after video loads -->
   <div id="scrub-section" style="display:none;">
-    <div class="sec" style="margin-bottom:6px;">Video Start Time — click to set where playback begins</div>
+    <div class="sec" style="margin-bottom:6px;">Start Time — click / drag</div>
     <div id="scrub-wrap">
       <canvas id="scrub-canvas"></canvas>
       <div id="scrub-window"></div>
       <div id="scrub-needle"></div>
       <div id="scrub-label">0.00s</div>
     </div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;letter-spacing:0.04em;">
-      Shaded region = 1.5s of video that will play during the animation
-    </div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;letter-spacing:0.04em;">Shaded = the 1.3s clip that plays inside the animation</div>
   </div>
 </div>
 
 <div class="panel">
   <div class="sec">Position, Scale &amp; Rotation</div>
   <div class="row">
-    <div class="cg">
-      <label>Offset X</label>
-      <input type="range" id="vid-x" min="-960" max="960" value="0" step="1">
-      <span class="v" id="vid-x-val">0px</span>
-    </div>
-    <div class="cg">
-      <label>Offset Y</label>
-      <input type="range" id="vid-y" min="-540" max="540" value="0" step="1">
-      <span class="v" id="vid-y-val">0px</span>
-    </div>
+    <div class="cg"><label>Offset X</label><input type="range" id="vid-x" min="-960" max="960" value="0" step="1"><span class="v" id="vid-x-val">0px</span></div>
+    <div class="cg"><label>Offset Y</label><input type="range" id="vid-y" min="-540" max="540" value="0" step="1"><span class="v" id="vid-y-val">0px</span></div>
   </div>
   <div class="row">
-    <div class="cg">
-      <label>Scale</label>
-      <input type="range" id="vid-scale" min="0.2" max="4" value="1" step="0.01">
-      <span class="v" id="vid-scale-val">1.00×</span>
-    </div>
-    <div class="cg">
-      <label>Vid Rotate</label>
-      <input type="range" id="vid-rot" min="-180" max="180" value="0" step="0.5">
-      <span class="v" id="vid-rot-val">0°</span>
-    </div>
+    <div class="cg"><label>Scale</label><input type="range" id="vid-scale" min="0.2" max="4" value="1" step="0.01"><span class="v" id="vid-scale-val">1.00×</span></div>
+    <div class="cg"><label>Vid Rotate</label><input type="range" id="vid-rot" min="-180" max="180" value="0" step="0.5"><span class="v" id="vid-rot-val">0°</span></div>
   </div>
 </div>
 
 <div class="panel">
-  <div class="sec">Export</div>
+  <div class="sec">Lines</div>
+  <div class="row">
+    <div class="cg"><label>Angle</label><input type="range" id="bar-angle" min="-45" max="45" value="-6" step="0.5"><span class="v" id="bar-angle-val">-6°</span></div>
+    <div class="cg"><label>Scale</label><input type="range" id="bar-scale" min="0.3" max="2" value="1" step="0.01"><span class="v" id="bar-scale-val">1.00×</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="sec">Export &amp; Fullscreen</div>
   <div class="btn-row">
-    <button class="btn go" id="export-btn">⬇ Export PNG Sequence (ZIP)</button>
+    <button class="btn go" id="export-png-btn">⬇ Export PNG Sequence (ZIP)</button>
+    <button class="btn fs" id="fullscreen-btn">⛶ Fullscreen (Screen Record)</button>
+    <button class="btn cog" id="settings-btn" title="Export settings">⚙</button>
   </div>
   <div style="font-size:10px;color:rgba(255,255,255,0.28);line-height:1.6;">
-    Renders all frames at 1920×1080. Video plays from your chosen start time. Takes ~10–30s.
+    Fullscreen: pure black canvas, hit Space to play. Screen record it with OBS / QuickTime / Win+G.
   </div>
 </div>
 
@@ -233,400 +181,417 @@ body {
 
 <canvas id="render-canvas" width="1920" height="1080"></canvas>
 
-<script>
-// ── Constants ──────────────────────────────────────────────────
-const W = 1920, H = 1080;
-const ANIM_DURATION_MS = 1500;
+<!-- Fullscreen overlay -->
+<div id="fs-overlay">
+  <canvas id="fs-canvas"></canvas>
+  <div id="fs-hint">Space — play &nbsp;·&nbsp; Esc — exit</div>
+</div>
 
+<!-- Settings Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div id="modal-title">⚙ PNG Export Settings</div>
+    <div class="mg">
+      <div class="mg-head">FPS per phase</div>
+      <div class="mg-lbl">Opening</div><div class="chip-row" id="cr-open"></div>
+      <div class="mg-lbl">Idle / Hold</div><div class="chip-row" id="cr-hold"></div>
+      <div class="mg-lbl">Closing</div><div class="chip-row" id="cr-close"></div>
+    </div>
+    <button id="modal-done">Done</button>
+  </div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────
+const W = 1920, H = 1080;
 const OPEN_MS  = 420;
 const HOLD_MS  = 480;
-const CLOSE_MS = 300;
-
-// Build a variable-fps frame schedule:
-// open + close = 24fps, hold = 12fps
-function buildFrameSchedule() {
-  const schedule = [];
-  const sections = [
-    { start: 0,                        end: OPEN_MS,               fps: 24 },
-    { start: OPEN_MS,                  end: OPEN_MS + HOLD_MS,     fps: 12 },
-    { start: OPEN_MS + HOLD_MS,        end: OPEN_MS + HOLD_MS + CLOSE_MS, fps: 24 },
-  ];
-  for (const sec of sections) {
-    const interval = 1000 / sec.fps;
-    for (let t = sec.start; t < sec.end - 0.001; t += interval) {
-      schedule.push(Math.round(t * 1000) / 1000);
-    }
-  }
-  // deduplicate and sort
-  const unique = [...new Set(schedule)].sort((a, b) => a - b);
-  return unique;
-}
-const FRAME_SCHEDULE = buildFrameSchedule();
-const TOTAL_FRAMES = FRAME_SCHEDULE.length;
+const CLOSE_MS = 420;
+const ANIM_MS  = OPEN_MS + HOLD_MS + CLOSE_MS; // 1320ms
 
 const SCALE_F        = W / 900;
 const WHITE_LINE_PX  = Math.round(10 * SCALE_F);
 const BLACK_INNER_PX = Math.round(4  * SCALE_F);
 const BAND_OPEN_H    = Math.round(H  * 0.60);
-const BAR_WIDTH_FRAC = 1.10;
-const FONT_SIZE      = Math.round(46 * SCALE_F);
+// barW is now dynamic — see drawFrame
+const FONT_SIZE      = Math.round(52 * SCALE_F); // bigger, same cap-height via scaleX
 const STROKE_W       = Math.round(3  * SCALE_F);
 
-// ── State ──────────────────────────────────────────────────────
-let videoEl      = null;
-let vidOffX      = 0, vidOffY = 0, vidScale = 1;
-let barAngleDeg  = -6;
-let vidRotDeg    = 0;
-let vidStartTime = 0;   // chosen video start second
-let scrubFrames  = [];  // thumbnail strip frames
+// ── Settings ─────────────────────────────────────────────────
+const S = { fpsOpen:24, fpsHold:12, fpsClose:24 };
 
-// ── DOM ────────────────────────────────────────────────────────
+// ── PNG frame schedule ────────────────────────────────────────
+function buildPngSchedule() {
+  const out = [];
+  const phases = [
+    { start:0,               end:OPEN_MS,           fps:S.fpsOpen  },
+    { start:OPEN_MS,         end:OPEN_MS+HOLD_MS,   fps:S.fpsHold  },
+    { start:OPEN_MS+HOLD_MS, end:ANIM_MS,           fps:S.fpsClose },
+  ];
+  for (const ph of phases) {
+    const step = 1000 / ph.fps;
+    for (let t = ph.start; t < ph.end - 1e-6; t += step) out.push(+(t.toFixed(4)));
+  }
+  out.push(ANIM_MS);
+  return [...new Set(out)].sort((a,b) => a-b);
+}
+
+// ── State ─────────────────────────────────────────────────────
+let videoEl = null, vidOffX=0, vidOffY=0, vidScale=1, vidRotDeg=0, vidStartTime=0;
+let barAngleDeg=-6, barScale=1;
+
+// ── DOM ───────────────────────────────────────────────────────
 const previewCanvas = document.getElementById('preview-canvas');
 const pCtx          = previewCanvas.getContext('2d');
 const renderCanvas  = document.getElementById('render-canvas');
 const rCtx          = renderCanvas.getContext('2d');
+const fsOverlay     = document.getElementById('fs-overlay');
+const fsCanvas      = document.getElementById('fs-canvas');
+const fsHint        = document.getElementById('fs-hint');
+let   fsCtx         = null; // initialised when fullscreen opens
 const fileInput     = document.getElementById('file-input');
 const previewBtn    = document.getElementById('preview-btn');
-const exportBtn     = document.getElementById('export-btn');
+const exportPngBtn  = document.getElementById('export-png-btn');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+const settingsBtn   = document.getElementById('settings-btn');
 const progWrap      = document.getElementById('prog-wrap');
 const progBar       = document.getElementById('prog-bar');
 const progLbl       = document.getElementById('prog-lbl');
 const scrubSection  = document.getElementById('scrub-section');
 const scrubWrap     = document.getElementById('scrub-wrap');
 const scrubCanvas   = document.getElementById('scrub-canvas');
+const scrubCtx      = scrubCanvas.getContext('2d');
 const scrubNeedle   = document.getElementById('scrub-needle');
 const scrubWindow   = document.getElementById('scrub-window');
 const scrubLabel    = document.getElementById('scrub-label');
-const scrubCtx      = scrubCanvas.getContext('2d');
+const modalOverlay  = document.getElementById('modal-overlay');
+const modalDone     = document.getElementById('modal-done');
 
-// ── Sliders ────────────────────────────────────────────────────
-function bindSlider(id, valId, suffix, decimals, setter) {
+// ── Sliders ───────────────────────────────────────────────────
+function bindSlider(id, valId, suffix, dec, fn) {
   const el = document.getElementById(id);
   el.addEventListener('input', () => {
     const v = parseFloat(el.value);
-    document.getElementById(valId).textContent = v.toFixed(decimals) + suffix;
-    setter(v);
-    refreshStaticPreview();
+    document.getElementById(valId).textContent = v.toFixed(dec) + suffix;
+    fn(v); refreshStaticPreview();
   });
 }
-bindSlider('vid-x',     'vid-x-val',     'px', 0, v => vidOffX     = v);
-bindSlider('vid-y',     'vid-y-val',     'px', 0, v => vidOffY     = v);
-bindSlider('vid-scale', 'vid-scale-val', '×',  2, v => vidScale    = v);
-bindSlider('vid-rot',   'vid-rot-val',   '°',  1, v => vidRotDeg   = v);
+bindSlider('vid-x',     'vid-x-val',     'px', 0, v => vidOffX    = v);
+bindSlider('vid-y',     'vid-y-val',     'px', 0, v => vidOffY    = v);
+bindSlider('vid-scale', 'vid-scale-val', '×',  2, v => vidScale   = v);
+bindSlider('vid-rot',   'vid-rot-val',   '°',  1, v => vidRotDeg  = v);
+bindSlider('bar-angle', 'bar-angle-val', '°',  1, v => barAngleDeg= v);
+bindSlider('bar-scale', 'bar-scale-val', '×',  2, v => barScale   = v);
 
-// ── Video upload ───────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────
+const FPS_OPTS = [6,8,12,18,24,30,60];
+function makeChips(rowId, getVal, setVal) {
+  const row = document.getElementById(rowId);
+  row.innerHTML = '';
+  FPS_OPTS.forEach(v => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (getVal()===v?' on':'');
+    c.textContent = v+' fps';
+    c.onclick = () => { setVal(v); row.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x===c)); };
+    row.appendChild(c);
+  });
+}
+function initModal() {
+  makeChips('cr-open',  ()=>S.fpsOpen,  v=>S.fpsOpen  =v);
+  makeChips('cr-hold',  ()=>S.fpsHold,  v=>S.fpsHold  =v);
+  makeChips('cr-close', ()=>S.fpsClose, v=>S.fpsClose =v);
+}
+settingsBtn.addEventListener('click', () => { initModal(); modalOverlay.classList.add('open'); });
+modalDone.addEventListener('click',   () => modalOverlay.classList.remove('open'));
+modalOverlay.addEventListener('click', e => { if(e.target===modalOverlay) modalOverlay.classList.remove('open'); });
+
+// ── Video upload ──────────────────────────────────────────────
 fileInput.addEventListener('change', async e => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const file = e.target.files[0]; if (!file) return;
   if (videoEl) { videoEl.pause(); URL.revokeObjectURL(videoEl.src); }
   videoEl = document.createElement('video');
   videoEl.src = URL.createObjectURL(file);
-  videoEl.muted = true;
-  videoEl.playsInline = true;
-  videoEl.preload = 'auto';
-  // Do NOT autoplay — wait for Space/Preview
-  await new Promise(r => { videoEl.onloadedmetadata = r; });
-  vidStartTime = 0;
-  scrubSection.style.display = 'block';
+  videoEl.muted=true; videoEl.playsInline=true; videoEl.preload='auto';
+  await new Promise(r => { videoEl.onloadedmetadata=r; });
+  vidStartTime=0;
+  scrubSection.style.display='block';
   await buildScrubStrip();
   updateScrubUI();
   refreshStaticPreview();
 });
 
-// ── Scrub strip ────────────────────────────────────────────────
 async function buildScrubStrip() {
-  if (!videoEl) return;
-  const dur = videoEl.duration;
-  const W_S = scrubWrap.offsetWidth || 684;
-  const H_S = 54;
-  scrubCanvas.width  = W_S;
-  scrubCanvas.height = H_S;
-
-  const THUMBS = 40;
-  scrubFrames = [];
-
-  const tmpV = document.createElement('video');
-  tmpV.src = videoEl.src;
-  tmpV.muted = true;
-  tmpV.playsInline = true;
-  await new Promise(r => { tmpV.onloadedmetadata = r; });
-
-  for (let i = 0; i < THUMBS; i++) {
-    tmpV.currentTime = (i / (THUMBS - 1)) * dur;
-    await new Promise(r => { tmpV.onseeked = r; });
-    const tc = document.createElement('canvas');
-    tc.width = Math.round(W_S / THUMBS);
-    tc.height = H_S;
-    tc.getContext('2d').drawImage(tmpV, 0, 0, tc.width, H_S);
-    scrubCtx.drawImage(tc, i * tc.width, 0);
-    scrubFrames.push(tc);
+  const dur=videoEl.duration, WS=scrubWrap.offsetWidth||684, HS=54, THUMBS=40;
+  scrubCanvas.width=WS; scrubCanvas.height=HS;
+  const tmp=document.createElement('video');
+  tmp.src=videoEl.src; tmp.muted=true; tmp.playsInline=true;
+  await new Promise(r=>{ tmp.onloadedmetadata=r; });
+  const tw=Math.round(WS/THUMBS);
+  for (let i=0;i<THUMBS;i++) {
+    tmp.currentTime=(i/(THUMBS-1))*dur;
+    await new Promise(r=>{ tmp.onseeked=r; });
+    scrubCtx.drawImage(tmp,0,0,tmp.videoWidth,tmp.videoHeight,i*tw,0,tw,HS);
   }
 }
-
 function updateScrubUI() {
-  if (!videoEl) return;
-  const dur = videoEl.duration;
-  const W_S = scrubCanvas.width || 684;
-  const ANIM_S = ANIM_DURATION_MS / 1000;
-  const pct = vidStartTime / dur;
-  const winPct = ANIM_S / dur;
-
-  scrubNeedle.style.left = (pct * 100) + '%';
-  scrubLabel.textContent = vidStartTime.toFixed(2) + 's / ' + dur.toFixed(2) + 's';
-
-  const winLeft = pct * W_S;
-  const winWidth = Math.min(winPct * W_S, W_S - winLeft);
-  scrubWindow.style.left  = winLeft + 'px';
-  scrubWindow.style.width = winWidth + 'px';
+  const dur=videoEl.duration, WS=scrubCanvas.width||684, pct=vidStartTime/dur;
+  scrubNeedle.style.left=(pct*100)+'%';
+  scrubLabel.textContent=vidStartTime.toFixed(2)+'s / '+dur.toFixed(2)+'s';
+  const winPx=Math.min((ANIM_MS/1000/dur)*WS, WS-pct*WS);
+  scrubWindow.style.left=(pct*WS)+'px'; scrubWindow.style.width=winPx+'px';
 }
-
-scrubWrap.addEventListener('click', e => {
-  if (!videoEl) return;
-  const rect = scrubWrap.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  vidStartTime = pct * videoEl.duration;
-  updateScrubUI();
-  refreshStaticPreview();
-});
-scrubWrap.addEventListener('mousemove', e => {
-  if (!videoEl || !(e.buttons & 1)) return;
-  const rect = scrubWrap.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  vidStartTime = pct * videoEl.duration;
-  updateScrubUI();
-  refreshStaticPreview();
-});
+function scrubTo(e) {
+  const rect=scrubWrap.getBoundingClientRect();
+  vidStartTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*videoEl.duration;
+  updateScrubUI(); refreshStaticPreview();
+}
+scrubWrap.addEventListener('click',     e=>{ if(videoEl) scrubTo(e); });
+scrubWrap.addEventListener('mousemove', e=>{ if(videoEl&&(e.buttons&1)) scrubTo(e); });
 
 // ── Easing ────────────────────────────────────────────────────
-function easeExpOut(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
-function easeExpIn(t)  { return t === 0 ? 0 : Math.pow(2, 10 * t - 10); }
+const easeExpOut = t => t>=1 ? 1 : 1-Math.pow(2,-10*t);
+const easeExpIn  = t => t<=0 ? 0 : Math.pow(2,10*t-10);
 
-function getAnimState(tMs) {
-  let bandH = 0, wordOpacity = 0;
-  if (tMs <= 0) {
-    bandH = 0; wordOpacity = 1;
-  } else if (tMs <= OPEN_MS) {
-    bandH = BAND_OPEN_H * easeExpOut(tMs / OPEN_MS);
-    wordOpacity = 1;
-  } else if (tMs <= OPEN_MS + HOLD_MS) {
-    bandH = BAND_OPEN_H;
-    const hp = (tMs - OPEN_MS) / HOLD_MS;
-    const fs = (HOLD_MS - 100) / HOLD_MS;
-    wordOpacity = hp < fs ? 1 : Math.max(0, 1 - (hp - fs) / (1 - fs));
-  } else if (tMs <= OPEN_MS + HOLD_MS + CLOSE_MS) {
-    bandH = BAND_OPEN_H * (1 - easeExpIn((tMs - OPEN_MS - HOLD_MS) / CLOSE_MS));
-    wordOpacity = 0;
-  } else {
-    bandH = 0; wordOpacity = 0;
+function animState(tMs) {
+  if (tMs<=0)               return {bandH:0,          wOpa:1};
+  if (tMs<=OPEN_MS)         return {bandH:BAND_OPEN_H*easeExpOut(tMs/OPEN_MS), wOpa:1};
+  if (tMs<=OPEN_MS+HOLD_MS) {
+    const hp=(tMs-OPEN_MS)/HOLD_MS, fs=(HOLD_MS-100)/HOLD_MS;
+    return {bandH:BAND_OPEN_H, wOpa: hp<fs ? 1 : Math.max(0,1-(hp-fs)/(1-fs))};
   }
-  return { bandH, wordOpacity };
+  if (tMs<=ANIM_MS)         return {bandH:BAND_OPEN_H*(1-easeExpIn((tMs-OPEN_MS-HOLD_MS)/CLOSE_MS)), wOpa:0};
+  return {bandH:0, wOpa:0};
 }
 
-// ── Draw frame ────────────────────────────────────────────────
+// ── Draw ──────────────────────────────────────────────────────
 function drawFrame(ctx, w, h, tMs) {
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, w, h);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
 
-  const { bandH, wordOpacity } = getAnimState(tMs);
-  const barCenterY = h / 2;
-  const totalBarH  = WHITE_LINE_PX * 2 + bandH;
-  const barW = w * BAR_WIDTH_FRAC;
-  const barX = -(barW - w) / 2;
+  // barW must always cover the full canvas width after rotation+scale.
+  // When barScale < 1 the band is narrower vertically but the lines must
+  // still reach both screen edges — so we make them longer to compensate.
+  // The rotated bar's horizontal footprint at angle θ for a rect of height H_bar:
+  //   extra = H_bar * |tan(θ)|
+  // We use a generous formula: base 110% + enough extra for the angle + scale.
+  const angleRad = barAngleDeg * Math.PI / 180;
+  const bandOpenScaled = Math.round(BAND_OPEN_H * barScale);
+  // Minimum width to guarantee coverage at any angle up to 45°
+  const barW = (w / barScale) * 1.15 + Math.abs(Math.tan(angleRad)) * h;
+  const barX = -( barW - w) / 2;
+
+  const {bandH: bandHRaw, wOpa} = animState(tMs);
+  // Scale band height by barScale
+  const bandH = Math.round(bandHRaw * barScale);
+  const cy = h / 2;
+  const totalH = WHITE_LINE_PX * 2 + bandH;
+
+  // Hard clip to canvas bounds
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,w,h); ctx.clip();
 
   ctx.save();
-  ctx.translate(w / 2, barCenterY);
-  ctx.rotate(barAngleDeg * Math.PI / 180);
-  ctx.translate(-w / 2, -barCenterY);
+  ctx.translate(w/2, cy); ctx.rotate(angleRad); ctx.translate(-w/2, -cy);
 
   // Top white line
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(barX, barCenterY - totalBarH / 2, barW, WHITE_LINE_PX);
+  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy-totalH/2, barW, WHITE_LINE_PX);
 
-  const bandTop = barCenterY - totalBarH / 2 + WHITE_LINE_PX;
-
-  if (bandH > 0) {
+  if (bandH>0) {
+    const bandTop = cy-totalH/2+WHITE_LINE_PX;
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(barX, bandTop, barW, bandH);
-    ctx.clip();
-
-    ctx.fillStyle = '#111';
-    ctx.fillRect(barX, bandTop, barW, bandH);
-
-    if (videoEl && videoEl.readyState >= 2) {
-      const vw = videoEl.videoWidth  || 1280;
-      const vh = videoEl.videoHeight || 720;
-      const cs = Math.max(barW / vw, bandH / vh);
-      const dw = vw * cs * vidScale;
-      const dh = vh * cs * vidScale;
-      const cx = barX + barW / 2 + vidOffX;
-      const cy2 = bandTop + bandH / 2 + vidOffY;
+    ctx.beginPath(); ctx.rect(barX,bandTop,barW,bandH); ctx.clip();
+    ctx.fillStyle='#111'; ctx.fillRect(barX,bandTop,barW,bandH);
+    if (videoEl&&videoEl.readyState>=2) {
+      const vw=videoEl.videoWidth||1280, vh=videoEl.videoHeight||720;
+      const cs=Math.max(barW/vw,bandH/vh), dw=vw*cs*vidScale, dh=vh*cs*vidScale;
       ctx.save();
-      ctx.translate(cx, cy2);
-      ctx.rotate(vidRotDeg * Math.PI / 180);
-      ctx.drawImage(videoEl, -dw / 2, -dh / 2, dw, dh);
+      ctx.translate(barX+barW/2+vidOffX, bandTop+bandH/2+vidOffY);
+      ctx.rotate(vidRotDeg*Math.PI/180);
+      ctx.drawImage(videoEl,-dw/2,-dh/2,dw,dh);
       ctx.restore();
     }
-
-    // Black inner borders
-    ctx.fillStyle = '#000';
-    ctx.fillRect(barX, bandTop, barW, BLACK_INNER_PX);
-    ctx.fillRect(barX, bandTop + bandH - BLACK_INNER_PX, barW, BLACK_INNER_PX);
+    ctx.fillStyle='#000';
+    ctx.fillRect(barX,bandTop,barW,BLACK_INNER_PX);
+    ctx.fillRect(barX,bandTop+bandH-BLACK_INNER_PX,barW,BLACK_INNER_PX);
     ctx.restore();
   }
 
   // Bottom white line
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(barX, barCenterY + totalBarH / 2 - WHITE_LINE_PX, barW, WHITE_LINE_PX);
-  ctx.restore();
+  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy+totalH/2-WHITE_LINE_PX, barW, WHITE_LINE_PX);
+  ctx.restore(); // un-rotate
+  ctx.restore(); // un-clip
 
-  // Words
-  if (wordOpacity > 0) {
-    ctx.font = `900 ${FONT_SIZE}px 'Roboto Condensed', Impact, sans-serif`;
-    ctx.textBaseline = 'alphabetic';
-    ctx.globalAlpha  = wordOpacity;
-    const lag         = 0.75;
-    const halfTravel  = (bandH / 2) * lag;
-    const cy          = barCenterY;
-
+  // Words — drawn in screen space (unaffected by bar rotation/scale)
+  if (wOpa>0) {
+    ctx.globalAlpha=wOpa;
+    // Use HWYGOTH; scaleX squishes horizontally so cap-height stays the same
+    // while making the overall text wider/bigger-feeling
     ctx.save();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth   = STROKE_W;
-    ctx.lineJoin    = 'round';
-    ctx.fillStyle   = '#000';
-    ctx.strokeText('DOMAIN', w * 0.18, cy - halfTravel - FONT_SIZE * 0.15);
-    ctx.fillText(  'DOMAIN', w * 0.18, cy - halfTravel - FONT_SIZE * 0.15);
+    ctx.transform(1.18, 0, 0, 1, 0, 0); // stretch horizontally ~18%
+    const scaledW = w / 1.18;
+    ctx.font=`normal ${FONT_SIZE}px HWYGOTH, 'Roboto Condensed', Impact, sans-serif`;
+    ctx.textBaseline='alphabetic';
+    const ht=(bandH/2)*0.75;
+
+    ctx.strokeStyle='#fff'; ctx.lineWidth=STROKE_W; ctx.lineJoin='round'; ctx.fillStyle='#000';
+    ctx.strokeText('DOMAIN',    scaledW*0.18, cy-ht-FONT_SIZE*0.15);
+    ctx.fillText(  'DOMAIN',    scaledW*0.18, cy-ht-FONT_SIZE*0.15);
+
+    const em=ctx.measureText('EXPANSION');
+    ctx.strokeText('EXPANSION', scaledW*0.82-em.width, cy+ht+FONT_SIZE*1.05);
+    ctx.fillText(  'EXPANSION', scaledW*0.82-em.width, cy+ht+FONT_SIZE*1.05);
     ctx.restore();
 
-    ctx.save();
-    ctx.font = `900 ${FONT_SIZE}px 'Roboto Condensed', Impact, sans-serif`;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth   = STROKE_W;
-    ctx.lineJoin    = 'round';
-    ctx.fillStyle   = '#000';
-    const em = ctx.measureText('EXPANSION');
-    ctx.strokeText('EXPANSION', w * 0.82 - em.width, cy + halfTravel + FONT_SIZE * 1.05);
-    ctx.fillText(  'EXPANSION', w * 0.82 - em.width, cy + halfTravel + FONT_SIZE * 1.05);
-    ctx.restore();
-
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=1;
   }
 }
 
-// ── Static preview (idle, video paused at start time) ─────────
+// ── Static preview ────────────────────────────────────────────
 function refreshStaticPreview() {
   if (videoEl) {
-    videoEl.pause();
-    // Seek to chosen start, then draw after seek
-    videoEl.currentTime = vidStartTime;
-    videoEl.onseeked = () => {
-      drawFrame(pCtx, W, H, OPEN_MS); // show fully-open frame
-      videoEl.onseeked = null;
-    };
+    videoEl.pause(); videoEl.currentTime=vidStartTime;
+    videoEl.onseeked=()=>{ drawFrame(pCtx,W,H,ANIM_MS); videoEl.onseeked=null; };
   } else {
-    drawFrame(pCtx, W, H, OPEN_MS);
+    drawFrame(pCtx,W,H,ANIM_MS);
   }
 }
 
-// ── Live preview animation ─────────────────────────────────────
-let previewRunning  = false;
-let previewStartWall = null;
-
-async function startPreview() {
-  if (previewRunning) return;
-  previewRunning = true;
-
-  // Seek video to chosen start time
-  if (videoEl) {
-    videoEl.currentTime = vidStartTime;
-    await new Promise(r => { videoEl.onseeked = () => { videoEl.onseeked = null; r(); }; });
-    videoEl.play();
-  }
-
-  previewStartWall = performance.now();
-
-  function loop(now) {
-    if (!previewRunning) return;
-    const tMs = now - previewStartWall;
-    drawFrame(pCtx, W, H, tMs);
-    if (tMs < ANIM_DURATION_MS + 100) {
-      requestAnimationFrame(loop);
-    } else {
-      previewRunning = false;
-      if (videoEl) videoEl.pause();
-      refreshStaticPreview();
-    }
-  }
-  requestAnimationFrame(loop);
-}
-
-previewBtn.addEventListener('click', () => { previewRunning = false; startPreview(); });
-document.addEventListener('keydown', e => {
-  if (e.code === 'Space') { e.preventDefault(); previewRunning = false; startPreview(); }
-});
-
-// Initial idle draw
-drawFrame(pCtx, W, H, 0);
-
-// ── Export ────────────────────────────────────────────────────
-// Properly await a video seek
-function seekVideo(v, t) {
-  return new Promise(r => {
-    if (Math.abs(v.currentTime - t) < 0.001) { r(); return; }
-    const done = () => { v.removeEventListener('seeked', done); r(); };
-    v.addEventListener('seeked', done);
-    v.currentTime = t;
+// ── Seek ──────────────────────────────────────────────────────
+function seekTo(v,t) {
+  return new Promise(r=>{
+    if (Math.abs(v.currentTime-t)<0.0005) { r(); return; }
+    const done=()=>{ v.removeEventListener('seeked',done); r(); };
+    v.addEventListener('seeked',done); v.currentTime=t;
   });
 }
 
-exportBtn.addEventListener('click', async () => {
-  exportBtn.disabled = true;
-  progWrap.style.display = 'flex';
-  progBar.style.background = '#7fff7f';
+// ── Animation playback (shared by preview + fullscreen) ───────
+let animRunning=false, animCtx=null, animW=0, animH=0;
 
-  const zip    = new JSZip();
-  const folder = zip.folder('domain_expansion_frames');
-
-  // Pause and seek to chosen start time before we begin
+async function playAnim(ctx, w, h) {
+  if (animRunning) return;
+  animRunning=true;
   if (videoEl) {
-    videoEl.pause();
-    await seekVideo(videoEl, vidStartTime);
+    await seekTo(videoEl,vidStartTime);
+    videoEl.play();
   }
-
-  for (let f = 0; f < TOTAL_FRAMES; f++) {
-    const tMs     = FRAME_SCHEDULE[f];
-    const vidTime = vidStartTime + tMs / 1000;
-
-    // Seek and wait for the frame to actually be ready
-    if (videoEl) {
-      await seekVideo(videoEl, vidTime);
-      // Extra wait for decoder to flush the frame to the element
-      await new Promise(r => requestAnimationFrame(r));
+  const t0=performance.now();
+  const loop=now=>{
+    if (!animRunning) return;
+    const tMs=now-t0;
+    drawFrame(ctx,w,h,tMs);
+    // Mirror to preview canvas too if we're in fullscreen
+    if (ctx!==pCtx) {
+      pCtx.drawImage(fsCanvas,0,0,W,H);
     }
+    if (tMs<ANIM_MS+80) {
+      requestAnimationFrame(loop);
+    } else {
+      animRunning=false;
+      if (videoEl) videoEl.pause();
+      drawFrame(ctx,w,h,ANIM_MS);
+      if (ctx!==pCtx) drawFrame(pCtx,W,H,ANIM_MS);
+    }
+  };
+  requestAnimationFrame(loop);
+}
 
-    drawFrame(rCtx, W, H, tMs);
+// ── Preview button / Space ────────────────────────────────────
+previewBtn.addEventListener('click', () => {
+  animRunning=false;
+  playAnim(pCtx,W,H);
+});
 
-    const blob    = await new Promise(res => renderCanvas.toBlob(res, 'image/png'));
-    const arrBuf  = await blob.arrayBuffer();
-    folder.file(`frame_${String(f).padStart(4,'0')}.png`, arrBuf);
+document.addEventListener('keydown', e => {
+  if (e.code!=='Space') return;
+  e.preventDefault();
+  if (modalOverlay.classList.contains('open')) return;
 
-    const pct = Math.round(((f + 1) / TOTAL_FRAMES) * 100);
-    progBar.style.width   = pct + '%';
-    progLbl.textContent   = `Rendering frame ${f + 1} / ${TOTAL_FRAMES}… (${pct}%)`;
-    await new Promise(r => setTimeout(r, 0));
+  if (fsOverlay.classList.contains('active')) {
+    // Space in fullscreen → play animation
+    animRunning=false;
+    playAnim(fsCtx, fsCanvas.width, fsCanvas.height);
+  } else {
+    animRunning=false;
+    playAnim(pCtx,W,H);
+  }
+});
+
+drawFrame(pCtx,W,H,ANIM_MS);
+
+// ── Fullscreen ────────────────────────────────────────────────
+fullscreenBtn.addEventListener('click', openFullscreen);
+
+function openFullscreen() {
+  // Size the canvas to the actual screen
+  fsCanvas.width  = screen.width;
+  fsCanvas.height = screen.height;
+  fsCtx = fsCanvas.getContext('2d');
+
+  fsOverlay.classList.add('active');
+  drawFrame(fsCtx, fsCanvas.width, fsCanvas.height, ANIM_MS);
+
+  // Try the browser Fullscreen API
+  if (fsOverlay.requestFullscreen) fsOverlay.requestFullscreen().catch(()=>{});
+
+  // Fade hint out after 3s
+  fsHint.style.opacity='1';
+  setTimeout(()=>{ fsHint.style.opacity='0'; }, 3000);
+}
+
+function closeFullscreen() {
+  animRunning=false;
+  if (videoEl) videoEl.pause();
+  fsOverlay.classList.remove('active');
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  refreshStaticPreview();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code==='Escape' && fsOverlay.classList.contains('active')) closeFullscreen();
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && fsOverlay.classList.contains('active')) closeFullscreen();
+});
+
+// ── PNG Export ────────────────────────────────────────────────
+function setUI(busy) {
+  exportPngBtn.disabled=busy; settingsBtn.disabled=busy; fullscreenBtn.disabled=busy;
+  progWrap.style.display=busy?'flex':'none';
+  if (!busy) progBar.style.width='0%';
+}
+function prog(i,n,label) {
+  progBar.style.width=Math.round((i/n)*100)+'%';
+  progLbl.textContent=label||`Frame ${i} / ${n}`;
+}
+
+exportPngBtn.addEventListener('click', async () => {
+  setUI(true); progBar.style.background='#7fff7f';
+  progLbl.textContent='Building frame list…';
+
+  const sched=buildPngSchedule(), total=sched.length;
+  const zip=new JSZip(), folder=zip.folder('domain_expansion_frames');
+
+  if (videoEl) { videoEl.pause(); await seekTo(videoEl,vidStartTime); }
+
+  for (let f=0;f<total;f++) {
+    const tMs=sched[f];
+    if (videoEl) { await seekTo(videoEl,vidStartTime+tMs/1000); await new Promise(r=>requestAnimationFrame(r)); }
+    drawFrame(rCtx,W,H,tMs);
+    const ab=await new Promise(res=>renderCanvas.toBlob(b=>b.arrayBuffer().then(res),'image/png'));
+    folder.file(`frame_${String(f).padStart(4,'0')}.png`,ab);
+    prog(f+1,total,`Rendering frame ${f+1} / ${total}  (${Math.round(((f+1)/total)*100)}%)`);
+    await new Promise(r=>setTimeout(r,0));
   }
 
-  progLbl.textContent = 'Zipping…';
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'domain_expansion_frames.zip'; a.click();
-  URL.revokeObjectURL(url);
-
-  progLbl.textContent       = 'Done! ZIP downloaded.';
-  progBar.style.background  = '#7fffA0';
-  exportBtn.disabled        = false;
+  progLbl.textContent='Zipping…';
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});
+  const url=URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),{href:url,download:'domain_expansion_frames.zip'}).click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  progBar.style.background='#7fffA0';
+  progLbl.textContent=`Done — ${total} frames downloaded.`;
+  setUI(false);
 });
 </script>
 </body>
