@@ -6,7 +6,6 @@
 <title>Domain Expansion — Exporter</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">
 <script>
-// Load HWYGOTH font before anything draws
 const _hwyFont = new FontFace('HWYGOTH', 'url(HWYGOTH.TTF)');
 _hwyFont.load().then(f => { document.fonts.add(f); }).catch(()=>{});
 </script>
@@ -130,6 +129,11 @@ body {
     <input type="file" id="file-input" accept="video/*">
     <button class="btn hi" id="preview-btn">▶ Preview (Space)</button>
   </div>
+  <div class="row" style="gap:16px;">
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.06em;text-transform:uppercase;">
+      <input type="checkbox" id="lines-lock" style="accent-color:#fff;width:14px;height:14px;"> Freeze Lines Open
+    </label>
+  </div>
   <div id="scrub-section" style="display:none;">
     <div class="sec" style="margin-bottom:6px;">Start Time — click / drag</div>
     <div id="scrub-wrap">
@@ -149,7 +153,7 @@ body {
     <div class="cg"><label>Offset Y</label><input type="range" id="vid-y" min="-540" max="540" value="0" step="1"><span class="v" id="vid-y-val">0px</span></div>
   </div>
   <div class="row">
-    <div class="cg"><label>Scale</label><input type="range" id="vid-scale" min="0.2" max="4" value="1" step="0.01"><span class="v" id="vid-scale-val">1.00×</span></div>
+    <div class="cg"><label>Scale</label><input type="range" id="vid-scale" min="0.05" max="4" value="1" step="0.01"><span class="v" id="vid-scale-val">1.00×</span></div>
     <div class="cg"><label>Vid Rotate</label><input type="range" id="vid-rot" min="-180" max="180" value="0" step="0.5"><span class="v" id="vid-rot-val">0°</span></div>
   </div>
 </div>
@@ -157,13 +161,30 @@ body {
 <div class="panel">
   <div class="sec">Lines</div>
   <div class="row">
-    <div class="cg"><label>Angle</label><input type="range" id="bar-angle" min="-45" max="45" value="-6" step="0.5"><span class="v" id="bar-angle-val">-6°</span></div>
-    <div class="cg"><label>Scale</label><input type="range" id="bar-scale" min="0.3" max="2" value="1" step="0.01"><span class="v" id="bar-scale-val">1.00×</span></div>
+    <div class="cg"><label>Angle</label><input type="range" id="bar-angle" min="-90" max="90" value="-6" step="0.5"><span class="v" id="bar-angle-val">-6°</span></div>
+    <div class="cg"><label>Scale</label><input type="range" id="bar-scale" min="0.3" max="1" value="1" step="0.01"><span class="v" id="bar-scale-val">1.00×</span></div>
   </div>
 </div>
 
 <div class="panel">
+  <div class="sec">Text</div>
+  <div class="row">
+    <div class="cg"><label>Text 1</label><input type="text" id="txt1" value="DOMAIN" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:5px 10px;border-radius:5px;font-family:'Roboto Condensed',sans-serif;font-size:13px;"></div>
+    <div class="cg"><label>Text 2</label><input type="text" id="txt2" value="EXPANSION" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:5px 10px;border-radius:5px;font-family:'Roboto Condensed',sans-serif;font-size:13px;"></div>
+  </div>
+  <div class="row" style="gap:16px;">
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.06em;text-transform:uppercase;">
+      <input type="checkbox" id="txt-disable" style="accent-color:#fff;width:14px;height:14px;"> Disable Text
+    </label>
+  </div>
+
+</div>
+
+<div class="panel">
   <div class="sec">Export &amp; Fullscreen</div>
+  <div class="row" style="margin-bottom:4px;">
+    <div class="cg"><label>BG Color</label><input type="color" id="bg-color" value="#000000" style="width:44px;height:28px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:none;cursor:pointer;padding:2px;"></div>
+  </div>
   <div class="btn-row">
     <button class="btn go" id="export-png-btn">⬇ Export PNG Sequence (ZIP)</button>
     <button class="btn fs" id="fullscreen-btn">⛶ Fullscreen (Screen Record)</button>
@@ -184,7 +205,7 @@ body {
 <!-- Fullscreen overlay -->
 <div id="fs-overlay">
   <canvas id="fs-canvas"></canvas>
-  <div id="fs-hint">Space — play &nbsp;·&nbsp; Esc — exit</div>
+  <div id="fs-hint"></div>
 </div>
 
 <!-- Settings Modal -->
@@ -213,8 +234,7 @@ const SCALE_F        = W / 900;
 const WHITE_LINE_PX  = Math.round(10 * SCALE_F);
 const BLACK_INNER_PX = Math.round(4  * SCALE_F);
 const BAND_OPEN_H    = Math.round(H  * 0.60);
-// barW is now dynamic — see drawFrame
-const FONT_SIZE      = Math.round(52 * SCALE_F); // bigger, same cap-height via scaleX
+const FONT_SIZE      = Math.round(58 * SCALE_F); // bigger, same cap-height via scaleX
 const STROKE_W       = Math.round(3  * SCALE_F);
 
 // ── Settings ─────────────────────────────────────────────────
@@ -238,7 +258,8 @@ function buildPngSchedule() {
 
 // ── State ─────────────────────────────────────────────────────
 let videoEl = null, vidOffX=0, vidOffY=0, vidScale=1, vidRotDeg=0, vidStartTime=0;
-let barAngleDeg=-6, barScale=1;
+let barAngleDeg=-6, barScale=1, linesLocked=false, bgColor='#000000';
+let txt1='DOMAIN', txt2='EXPANSION', txtDisabled=false;
 
 // ── DOM ───────────────────────────────────────────────────────
 const previewCanvas = document.getElementById('preview-canvas');
@@ -282,6 +303,11 @@ bindSlider('vid-scale', 'vid-scale-val', '×',  2, v => vidScale   = v);
 bindSlider('vid-rot',   'vid-rot-val',   '°',  1, v => vidRotDeg  = v);
 bindSlider('bar-angle', 'bar-angle-val', '°',  1, v => barAngleDeg= v);
 bindSlider('bar-scale', 'bar-scale-val', '×',  2, v => barScale   = v);
+document.getElementById('bg-color').addEventListener('input', e => { bgColor = e.target.value; refreshStaticPreview(); });
+document.getElementById('lines-lock').addEventListener('change', e => { linesLocked = e.target.checked; refreshStaticPreview(); });
+document.getElementById('txt1').addEventListener('input', e => { txt1 = e.target.value; refreshStaticPreview(); });
+document.getElementById('txt2').addEventListener('input', e => { txt2 = e.target.value; refreshStaticPreview(); });
+document.getElementById('txt-disable').addEventListener('change', e => { txtDisabled = e.target.checked; refreshStaticPreview(); });
 
 // ── Modal ─────────────────────────────────────────────────────
 const FPS_OPTS = [6,8,12,18,24,30,60];
@@ -353,6 +379,7 @@ const easeExpOut = t => t>=1 ? 1 : 1-Math.pow(2,-10*t);
 const easeExpIn  = t => t<=0 ? 0 : Math.pow(2,10*t-10);
 
 function animState(tMs) {
+  if (linesLocked) return {bandH:BAND_OPEN_H, wOpa:1};
   if (tMs<=0)               return {bandH:0,          wOpa:1};
   if (tMs<=OPEN_MS)         return {bandH:BAND_OPEN_H*easeExpOut(tMs/OPEN_MS), wOpa:1};
   if (tMs<=OPEN_MS+HOLD_MS) {
@@ -366,34 +393,24 @@ function animState(tMs) {
 // ── Draw ──────────────────────────────────────────────────────
 function drawFrame(ctx, w, h, tMs) {
   ctx.clearRect(0,0,w,h);
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=bgColor; ctx.fillRect(0,0,w,h);
 
-  // barW must always cover the full canvas width after rotation+scale.
-  // When barScale < 1 the band is narrower vertically but the lines must
-  // still reach both screen edges — so we make them longer to compensate.
-  // The rotated bar's horizontal footprint at angle θ for a rect of height H_bar:
-  //   extra = H_bar * |tan(θ)|
-  // We use a generous formula: base 110% + enough extra for the angle + scale.
   const angleRad = barAngleDeg * Math.PI / 180;
   const bandOpenScaled = Math.round(BAND_OPEN_H * barScale);
-  // Minimum width to guarantee coverage at any angle up to 45°
   const barW = (w / barScale) * 1.15 + Math.abs(Math.tan(angleRad)) * h;
   const barX = -( barW - w) / 2;
 
   const {bandH: bandHRaw, wOpa} = animState(tMs);
-  // Scale band height by barScale
   const bandH = Math.round(bandHRaw * barScale);
   const cy = h / 2;
   const totalH = WHITE_LINE_PX * 2 + bandH;
 
-  // Hard clip to canvas bounds
   ctx.save();
   ctx.beginPath(); ctx.rect(0,0,w,h); ctx.clip();
 
   ctx.save();
   ctx.translate(w/2, cy); ctx.rotate(angleRad); ctx.translate(-w/2, -cy);
 
-  // Top white line
   ctx.fillStyle='#fff'; ctx.fillRect(barX, cy-totalH/2, barW, WHITE_LINE_PX);
 
   if (bandH>0) {
@@ -403,7 +420,7 @@ function drawFrame(ctx, w, h, tMs) {
     ctx.fillStyle='#111'; ctx.fillRect(barX,bandTop,barW,bandH);
     if (videoEl&&videoEl.readyState>=2) {
       const vw=videoEl.videoWidth||1280, vh=videoEl.videoHeight||720;
-      const cs=Math.max(barW/vw,bandH/vh), dw=vw*cs*vidScale, dh=vh*cs*vidScale;
+      const cs=Math.max(w/vw,bandH/vh), dw=vw*cs*vidScale, dh=vh*cs*vidScale;
       ctx.save();
       ctx.translate(barX+barW/2+vidOffX, bandTop+bandH/2+vidOffY);
       ctx.rotate(vidRotDeg*Math.PI/180);
@@ -416,30 +433,36 @@ function drawFrame(ctx, w, h, tMs) {
     ctx.restore();
   }
 
-  // Bottom white line
   ctx.fillStyle='#fff'; ctx.fillRect(barX, cy+totalH/2-WHITE_LINE_PX, barW, WHITE_LINE_PX);
   ctx.restore(); // un-rotate
   ctx.restore(); // un-clip
 
-  // Words — drawn in screen space (unaffected by bar rotation/scale)
-  if (wOpa>0) {
+  if (wOpa>0 && !txtDisabled) {
     ctx.globalAlpha=wOpa;
-    // Use HWYGOTH; scaleX squishes horizontally so cap-height stays the same
-    // while making the overall text wider/bigger-feeling
     ctx.save();
     ctx.transform(1.18, 0, 0, 1, 0, 0); // stretch horizontally ~18%
     const scaledW = w / 1.18;
     ctx.font=`normal ${FONT_SIZE}px HWYGOTH, 'Roboto Condensed', Impact, sans-serif`;
     ctx.textBaseline='alphabetic';
-    const ht=(bandH/2)*1;
+    const ht=(bandH/2)*0.75;
+
+    const em=ctx.measureText(txt2);
 
     ctx.strokeStyle='#fff'; ctx.lineWidth=STROKE_W; ctx.lineJoin='round'; ctx.fillStyle='#000';
-    ctx.strokeText('DOMAIN',    scaledW*0.18, cy-ht-FONT_SIZE*0.15);
-    ctx.fillText(  'DOMAIN',    scaledW*0.18, cy-ht-FONT_SIZE*0.15);
+    if (!txtDisabled) {
+    const t1y = angleRad >= 0 ? cy+ht+FONT_SIZE*1.05 : cy-ht-FONT_SIZE*0.15;
+    const t2y = angleRad >= 0 ? cy-ht-FONT_SIZE*0.15 : cy+ht+FONT_SIZE*1.05;
 
-    const em=ctx.measureText('EXPANSION');
-    ctx.strokeText('EXPANSION', scaledW*0.82-em.width, cy+ht+FONT_SIZE*1.05);
-    ctx.fillText(  'EXPANSION', scaledW*0.82-em.width, cy+ht+FONT_SIZE*1.05);
+    const label1 = angleRad >= 0 ? txt2 : txt1;
+    const label2 = angleRad >= 0 ? txt1 : txt2;
+
+    ctx.textAlign = 'center';
+    ctx.strokeText(label1, scaledW*0.25, t1y);
+    ctx.fillText(  label1, scaledW*0.25, t1y);
+
+    ctx.strokeText(label2, scaledW*0.75, t2y);
+    ctx.fillText(  label2, scaledW*0.75, t2y);
+    }
     ctx.restore();
 
     ctx.globalAlpha=1;
@@ -450,7 +473,9 @@ function drawFrame(ctx, w, h, tMs) {
 function refreshStaticPreview() {
   if (videoEl) {
     videoEl.pause(); videoEl.currentTime=vidStartTime;
-    videoEl.onseeked=()=>{ drawFrame(pCtx,W,H,ANIM_MS); videoEl.onseeked=null; };
+    videoEl.onseeked=()=>{ drawFrame(pCtx,W,H,ANIM_MS);
+
+ videoEl.onseeked=null; };
   } else {
     drawFrame(pCtx,W,H,ANIM_MS);
   }
@@ -480,7 +505,6 @@ async function playAnim(ctx, w, h) {
     if (!animRunning) return;
     const tMs=now-t0;
     drawFrame(ctx,w,h,tMs);
-    // Mirror to preview canvas too if we're in fullscreen
     if (ctx!==pCtx) {
       pCtx.drawImage(fsCanvas,0,0,W,H);
     }
@@ -508,7 +532,6 @@ document.addEventListener('keydown', e => {
   if (modalOverlay.classList.contains('open')) return;
 
   if (fsOverlay.classList.contains('active')) {
-    // Space in fullscreen → play animation
     animRunning=false;
     playAnim(fsCtx, fsCanvas.width, fsCanvas.height);
   } else {
@@ -523,18 +546,16 @@ drawFrame(pCtx,W,H,ANIM_MS);
 fullscreenBtn.addEventListener('click', openFullscreen);
 
 function openFullscreen() {
-  // Size the canvas to the actual screen
   fsCanvas.width  = screen.width;
   fsCanvas.height = screen.height;
   fsCtx = fsCanvas.getContext('2d');
 
+  fsOverlay.style.background = bgColor;
   fsOverlay.classList.add('active');
   drawFrame(fsCtx, fsCanvas.width, fsCanvas.height, ANIM_MS);
 
-  // Try the browser Fullscreen API
   if (fsOverlay.requestFullscreen) fsOverlay.requestFullscreen().catch(()=>{});
 
-  // Fade hint out after 3s
   fsHint.style.opacity='1';
   setTimeout(()=>{ fsHint.style.opacity='0'; }, 3000);
 }
