@@ -164,6 +164,9 @@ body {
     <div class="cg"><label>Angle</label><input type="range" id="bar-angle" min="-90" max="90" value="-6" step="0.5"><span class="v" id="bar-angle-val">-6°</span></div>
     <div class="cg"><label>Scale</label><input type="range" id="bar-scale" min="0.3" max="1" value="1" step="0.01"><span class="v" id="bar-scale-val">1.00×</span></div>
   </div>
+  <div class="row">
+    <div class="cg"><label>Thickness</label><input type="range" id="line-thickness" min="10" max="400" value="100" step="1"><span class="v" id="line-thickness-val">100%</span></div>
+  </div>
 </div>
 
 <div class="panel">
@@ -171,6 +174,9 @@ body {
   <div class="row">
     <div class="cg"><label>Text 1</label><input type="text" id="txt1" value="DOMAIN" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:5px 10px;border-radius:5px;font-family:'Roboto Condensed',sans-serif;font-size:13px;"></div>
     <div class="cg"><label>Text 2</label><input type="text" id="txt2" value="EXPANSION" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:5px 10px;border-radius:5px;font-family:'Roboto Condensed',sans-serif;font-size:13px;"></div>
+  </div>
+  <div class="row">
+    <div class="cg"><label>Text Size</label><input type="range" id="txt-size" min="20" max="300" value="100" step="1"><span class="v" id="txt-size-val">100%</span></div>
   </div>
   <div class="row" style="gap:16px;">
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.06em;text-transform:uppercase;">
@@ -182,17 +188,12 @@ body {
 
 <div class="panel">
   <div class="sec">Export &amp; Fullscreen</div>
-  <div class="row" style="margin-bottom:4px;">
-    <div class="cg"><label>BG Color</label><input type="color" id="bg-color" value="#000000" style="width:44px;height:28px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:none;cursor:pointer;padding:2px;"></div>
-  </div>
   <div class="btn-row">
     <button class="btn go" id="export-png-btn">⬇ Export PNG Sequence (ZIP)</button>
     <button class="btn fs" id="fullscreen-btn">⛶ Fullscreen (Screen Record)</button>
     <button class="btn cog" id="settings-btn" title="Export settings">⚙</button>
   </div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.28);line-height:1.6;">
-    Fullscreen: your chosen BG color canvas, hit Space to play. Screen record it with OBS / QuickTime / Win+G.
-  </div>
+
 </div>
 
 <div id="prog-wrap">
@@ -217,6 +218,24 @@ body {
       <div class="mg-lbl">Opening</div><div class="chip-row" id="cr-open"></div>
       <div class="mg-lbl">Idle / Hold</div><div class="chip-row" id="cr-hold"></div>
       <div class="mg-lbl">Closing</div><div class="chip-row" id="cr-close"></div>
+    </div>
+    <div class="mg">
+      <div class="mg-head">Export Background</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:0.06em;text-transform:uppercase;min-width:80px;">PNG Export</label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.06em;text-transform:uppercase;">
+          <input type="checkbox" id="export-transparent" checked style="accent-color:#fff;width:14px;height:14px;"> Transparent
+        </label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="color" id="export-bg-color" value="#000000" style="width:44px;height:28px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:none;cursor:pointer;padding:2px;opacity:0.3;">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:0.06em;text-transform:uppercase;min-width:80px;">Fullscreen</label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="color" id="bg-color" value="#000000" style="width:44px;height:28px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:none;cursor:pointer;padding:2px;">
+        </div>
+      </div>
     </div>
     <button id="modal-done">Done</button>
   </div>
@@ -258,14 +277,14 @@ function buildPngSchedule() {
 
 // ── State ─────────────────────────────────────────────────────
 let videoEl = null, vidOffX=0, vidOffY=0, vidScale=1, vidRotDeg=0, vidStartTime=0;
-let barAngleDeg=-6, barScale=1, linesLocked=false, bgColor='#000000';
-let txt1='DOMAIN', txt2='EXPANSION', txtDisabled=false;
+let barAngleDeg=-6, barScale=1, linesLocked=false, bgColor='#000000', exportTransparent=true, exportBgColor='#000000';
+let txt1='DOMAIN', txt2='EXPANSION', txtDisabled=false, txtSizeScale=1, lineThicknessScale=1;
 
 // ── DOM ───────────────────────────────────────────────────────
 const previewCanvas = document.getElementById('preview-canvas');
 const pCtx          = previewCanvas.getContext('2d');
 const renderCanvas  = document.getElementById('render-canvas');
-const rCtx          = renderCanvas.getContext('2d');
+const rCtx          = renderCanvas.getContext('2d', {alpha:true});
 const fsOverlay     = document.getElementById('fs-overlay');
 const fsCanvas      = document.getElementById('fs-canvas');
 const fsHint        = document.getElementById('fs-hint');
@@ -303,11 +322,12 @@ bindSlider('vid-scale', 'vid-scale-val', '×',  2, v => vidScale   = v);
 bindSlider('vid-rot',   'vid-rot-val',   '°',  1, v => vidRotDeg  = v);
 bindSlider('bar-angle', 'bar-angle-val', '°',  1, v => barAngleDeg= v);
 bindSlider('bar-scale', 'bar-scale-val', '×',  2, v => barScale   = v);
-document.getElementById('bg-color').addEventListener('input', e => { bgColor = e.target.value; refreshStaticPreview(); });
+bindSlider('line-thickness', 'line-thickness-val', '%', 0, v => lineThicknessScale = v / 100);
 document.getElementById('lines-lock').addEventListener('change', e => { linesLocked = e.target.checked; refreshStaticPreview(); });
 document.getElementById('txt1').addEventListener('input', e => { txt1 = e.target.value; refreshStaticPreview(); });
 document.getElementById('txt2').addEventListener('input', e => { txt2 = e.target.value; refreshStaticPreview(); });
 document.getElementById('txt-disable').addEventListener('change', e => { txtDisabled = e.target.checked; refreshStaticPreview(); });
+bindSlider('txt-size', 'txt-size-val', '%', 0, v => txtSizeScale = v / 100);
 
 // ── Modal ─────────────────────────────────────────────────────
 const FPS_OPTS = [6,8,12,18,24,30,60];
@@ -324,6 +344,16 @@ function makeChips(rowId, getVal, setVal) {
 }
 function initModal() {
   makeChips('cr-open',  ()=>S.fpsOpen,  v=>S.fpsOpen  =v);
+  const expTrans = document.getElementById('export-transparent');
+  const expBgCol = document.getElementById('export-bg-color');
+  expTrans.checked = exportTransparent;
+  const bgCol = document.getElementById('bg-color');
+  bgCol.value = bgColor;
+  bgCol.oninput = e => { bgColor = e.target.value; refreshStaticPreview(); };
+  expBgCol.value = exportBgColor;
+  expBgCol.style.opacity = exportTransparent ? '0.3' : '1';
+  expTrans.onchange = e => { exportTransparent = e.target.checked; expBgCol.style.opacity = exportTransparent ? '0.3' : '1'; };
+  expBgCol.oninput = e => { exportBgColor = e.target.value; };
   makeChips('cr-hold',  ()=>S.fpsHold,  v=>S.fpsHold  =v);
   makeChips('cr-close', ()=>S.fpsClose, v=>S.fpsClose =v);
 }
@@ -393,7 +423,7 @@ function animState(tMs) {
 // ── Draw ──────────────────────────────────────────────────────
 function drawFrame(ctx, w, h, tMs) {
   ctx.clearRect(0,0,w,h);
-  ctx.fillStyle=bgColor; ctx.fillRect(0,0,w,h);
+  if(bgColor!=='transparent'){ctx.fillStyle=bgColor;ctx.fillRect(0,0,w,h);}
 
   const angleRad = barAngleDeg * Math.PI / 180;
   const bandOpenScaled = Math.round(BAND_OPEN_H * barScale);
@@ -403,7 +433,9 @@ function drawFrame(ctx, w, h, tMs) {
   const {bandH: bandHRaw, wOpa} = animState(tMs);
   const bandH = Math.round(bandHRaw * barScale);
   const cy = h / 2;
-  const totalH = WHITE_LINE_PX * 2 + bandH;
+  const wlPx = Math.round(WHITE_LINE_PX * lineThicknessScale);
+  const biPx = Math.round(BLACK_INNER_PX * lineThicknessScale);
+  const totalH = wlPx * 2 + bandH;
 
   ctx.save();
   ctx.beginPath(); ctx.rect(0,0,w,h); ctx.clip();
@@ -411,10 +443,10 @@ function drawFrame(ctx, w, h, tMs) {
   ctx.save();
   ctx.translate(w/2, cy); ctx.rotate(angleRad); ctx.translate(-w/2, -cy);
 
-  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy-totalH/2, barW, WHITE_LINE_PX);
+  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy-totalH/2, barW, wlPx);
 
   if (bandH>0) {
-    const bandTop = cy-totalH/2+WHITE_LINE_PX;
+    const bandTop = cy-totalH/2+wlPx;
     ctx.save();
     ctx.beginPath(); ctx.rect(barX,bandTop,barW,bandH); ctx.clip();
     ctx.fillStyle='#111'; ctx.fillRect(barX,bandTop,barW,bandH);
@@ -428,12 +460,12 @@ function drawFrame(ctx, w, h, tMs) {
       ctx.restore();
     }
     ctx.fillStyle='#000';
-    ctx.fillRect(barX,bandTop,barW,BLACK_INNER_PX);
-    ctx.fillRect(barX,bandTop+bandH-BLACK_INNER_PX,barW,BLACK_INNER_PX);
+    ctx.fillRect(barX,bandTop,barW,biPx);
+    ctx.fillRect(barX,bandTop+bandH-biPx,barW,biPx);
     ctx.restore();
   }
 
-  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy+totalH/2-WHITE_LINE_PX, barW, WHITE_LINE_PX);
+  ctx.fillStyle='#fff'; ctx.fillRect(barX, cy+totalH/2-wlPx, barW, wlPx);
   ctx.restore(); // un-rotate
   ctx.restore(); // un-clip
 
@@ -442,7 +474,7 @@ function drawFrame(ctx, w, h, tMs) {
     ctx.save();
     ctx.transform(1.18, 0, 0, 1, 0, 0); // stretch horizontally ~18%
     const scaledW = w / 1.18;
-    ctx.font=`normal ${FONT_SIZE}px HWYGOTH, 'Roboto Condensed', Impact, sans-serif`;
+    ctx.font=`normal ${Math.round(FONT_SIZE*txtSizeScale)}px HWYGOTH, 'Roboto Condensed', Impact, sans-serif`;
     ctx.textBaseline='alphabetic';
     const ht=(bandH/2)*0.75;
 
@@ -598,7 +630,17 @@ exportPngBtn.addEventListener('click', async () => {
   for (let f=0;f<total;f++) {
     const tMs=sched[f];
     if (videoEl) { await seekTo(videoEl,vidStartTime+tMs/1000); await new Promise(r=>requestAnimationFrame(r)); }
-    drawFrame(rCtx,W,H,tMs);
+    if (exportTransparent) {
+      rCtx.clearRect(0,0,W,H);
+      // draw without background fill
+      const _bg = bgColor; bgColor = 'transparent';
+      drawFrame(rCtx,W,H,tMs);
+      bgColor = _bg;
+    } else {
+      const _bg = bgColor; bgColor = exportBgColor;
+      drawFrame(rCtx,W,H,tMs);
+      bgColor = _bg;
+    }
     const ab=await new Promise(res=>renderCanvas.toBlob(b=>b.arrayBuffer().then(res),'image/png'));
     folder.file(`frame_${String(f).padStart(4,'0')}.png`,ab);
     prog(f+1,total,`Rendering frame ${f+1} / ${total}  (${Math.round(((f+1)/total)*100)}%)`);
